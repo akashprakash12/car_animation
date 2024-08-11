@@ -27,66 +27,71 @@ import {
   EffectComposer,
   SSAO,
 } from "@react-three/postprocessing";
+import * as THREE from 'three';
+import { useControls,Leva } from "leva";
 
-import { useControls } from "leva";
+import vertexShader from "./assets/vert.js";
+import fragmentShader from "./assets/frag.js";
 
 function Model(props) {
-  const { scene, nodes, materials } = useGLTF("car.glb");
+  const { scene, nodes, materials } = useGLTF("pagani.glb");
+  const { color, aNumber } = useControls({ color: "#f00"})
+  const bodyMeshRef = useRef();
+  const bodyMesh2Ref = useRef();
+
+ 
   useLayoutEffect(() => {
     Object.values(nodes).forEach(
-      (node) => node.isMesh && (node.receiveShadow = node.castShadow = true)
+      (node) =>{
+        if (node.isMesh) {
+          node.receiveShadow = node.castShadow = true;
+        }
+      }
     );
+
+    const body = 'Object_42'; 
+    const body2='Object_43'
+    const bodyMesh = nodes[body];
+    const bodyMesh2=nodes[body2];
+
+    if (bodyMesh && body2) {
+      const headlightMaterial = new THREE.MeshPhysicalMaterial({
+        color: color,  
+      });
+      bodyMesh.material = headlightMaterial;
+      bodyMesh2.material=headlightMaterial
+      bodyMeshRef.current = bodyMesh;
+      bodyMesh2Ref.current = bodyMesh2;
+    }
+   
   }, [nodes, materials]);
+  useFrame(()=>{
+     
+      if (bodyMeshRef.current && bodyMesh2Ref.current) {
+        const updatedColor = new THREE.Color(color);
+        const updaterugn= new THREE.MeshPhysicalMaterial({
+          color:updatedColor
+        })
+        bodyMeshRef.current.material=updaterugn
+        bodyMesh2Ref.current.material=updaterugn
+      }
+  })
   return <primitive object={scene} {...props} />;
 }
-const fragmentShader = `
-
-varying vec2 vUv;
-
-vec3 colorA = vec3(0.912,0.191,0.652);
-vec3 colorB = vec3(1.000,0.777,0.052);
-
-void main() {
-  // "Normalizing" with an arbitrary value
-  // We'll see a cleaner technique later :)   
-  vec2 normalizedPixel = gl_FragCoord.xy/600.0;
-  vec3 color = mix(colorA, colorB, normalizedPixel.x);
-
-  gl_FragColor = vec4(color,1.0);
-}
-`;
-const vertexShader = `
-uniform float u_time;
-
-varying vec2 vUv;
-
-void main() {
-
- vec4 modelPosition = modelMatrix * vec4(position, 1.0);
-  modelPosition.y += sin(modelPosition.x * 4.0 + u_time * 2.0) * 0.2;
-  
-  // Uncomment the code and hit the refresh button below for a more complex effect 🪄
-  // modelPosition.y += sin(modelPosition.z * 6.0 + u_time * 2.0) * 0.1;
-
-  vec4 viewPosition = viewMatrix * modelPosition;
-  vec4 projectedPosition = projectionMatrix * viewPosition;
-
-  gl_Position = projectedPosition;
-}`;
 
 function App() {
   const mesh = useRef();
   const hover = useRef(false);
-
   const uniforms = useMemo(
     () => ({
       u_time: {
-        value: 0.0,
+        value: 0,
       },
+      u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
       u_intensity: {
-        value: 0.3,
+        value: 0.03,
       },
-      u_mouse: { value: new Vector2(0, 0) },
+      u_mouse: { value: new Vector2() },
       u_bg: {
         value: new Color("#A1A3F7"),
       },
@@ -98,7 +103,6 @@ function App() {
 
   useFrame((state) => {
     const { clock } = state;
-
     mesh.current.material.uniforms.u_time.value = clock.getElapsedTime();
     mesh.current.material.uniforms.u_intensity.value = MathUtils.lerp(
       mesh.current.material.uniforms.u_intensity.value,
@@ -109,19 +113,22 @@ function App() {
 
   return (
     <>
-      <Environment preset="night" background />
+      <Environment preset="forest" background />
       <OrbitControls />
       <ambientLight />
       <directionalLight
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
+        position={[10, 10,15]}
+        intensity={1}
+        castShadow
       />
 
       <group position={[0, -1, 0]}>
         <Suspense fallback={null}>
           {/* <Butterfly position={[4, 0, 0]} rotation={[0, 1, 0]} />
             <Butterfly position={[0, 4, 0]} /> */}
-          {/* <Model /> */}
+          <Model />
           <EffectComposer smaa enableNormalPass>
             <Bloom />
             <Autofocus bokehScale={0.2} blur={0.5} focalLength={0.01} />
@@ -132,19 +139,20 @@ function App() {
 
       <mesh
         rotation={[-0.5 * Math.PI, 0, 0]}
-        position={[0, -1, 0]}
+        position={[-1, -1.5, 0]}
         ref={mesh}
         scale={1.5}
+        castShadow
         receiveShadow
         onPointerOver={() => (hover.current = true)}
         onPointerOut={() => (hover.current = false)}
       >
-        <planeGeometry args={[50, 25, 50, 42]} />
+         <planeGeometry args={[25, 20,25]} />
         <shaderMaterial
           fragmentShader={fragmentShader}
           vertexShader={vertexShader}
           uniforms={uniforms}
-          wireframe
+          side={THREE.DoubleSide}
         ></shaderMaterial>
       </mesh>
       <Stars />
